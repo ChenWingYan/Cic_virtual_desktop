@@ -10,7 +10,8 @@
     "start": "electron .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "smoke": "node scripts/smoke.mjs"
+    "smoke": "node scripts/smoke.mjs",
+    "smoke:browser": "node scripts/browser-smoke.mjs"
   },
   "devDependencies": {
     "electron": "45.1.0",
