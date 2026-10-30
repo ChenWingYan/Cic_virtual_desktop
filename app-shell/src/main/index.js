@@ -6,6 +6,7 @@ const root = fileURLToPath(new URL('../../../', import.meta.url));
 const trustedURL = pathToFileURL(path.join(root,'dist/index.html')).href;
 let window;
 let browserHost;
+let browserInputQueue = Promise.resolve();
 // 冒烟测试使用独立数据目录，避免占用现场校准程序的 Cookie 和进程锁。
 if (process.env.CIC_DESKTOP_DATA_DIR) app.setPath('userData', path.resolve(process.env.CIC_DESKTOP_DATA_DIR));
 /** 仅向可信桌面发送浏览器操作反馈。 */
@@ -41,7 +42,11 @@ ipcMain.handle('browser:open', /* 创建唯一离屏网页。 */ async event => 
 ipcMain.handle('browser:command', /* 验证来源后交给内容承载。 */ async (event, command, value) => { assertTrusted(event); return browserHost.command(command, value); });
 ipcMain.on('browser:present', /* 同步当前显示计划。 */ (event, request) => { try { assertTrusted(event); browserHost.present(request); } catch { notify('网页显示计划无效。'); } });
 ipcMain.on('browser:input', /* 输入仅来自可信桌面，内容承载再次校验。 */ (event, input) => {
-  try { assertTrusted(event); browserHost.input(input).catch(/* 输入失败提供可见反馈。 */ () => notify('网页输入未完成，请重试。')); } catch { notify('拒绝无效网页输入。'); }
+  try {
+    assertTrusted(event);
+    // 组合输入通过 CDP，提交文本通过 Electron；串行执行，避免两条通道乱序。
+    browserInputQueue = browserInputQueue.then(/* 按接收顺序完成当前输入。 */ () => browserHost.input(input)).catch(/* 输入失败后仍接受后续操作。 */ () => notify('网页输入未完成，请重试。'));
+  } catch { notify('拒绝无效网页输入。'); }
 });
 ipcMain.handle('desktop:quit', /* 校验可信主框架后退出。 */ event => {
   assertTrusted(event);

@@ -11,21 +11,36 @@ declare global { interface Window { desktop: {
   quit(): Promise<void>;
   /** 订阅主进程恢复通知。 */
   onReset(listener: () => void): void;
-  /** 订阅外壳捕获的返回桌面快捷键。 */
+  /** 订阅外壳捕获的返回桌面快捷键。
+   * @param listener 不接收 IPC 事件对象的通知回调。
+   */
   onHome(listener: () => void): void;
   /** 创建唯一离屏网页。 */
   openBrowser(): Promise<BrowserState>;
-  /** 发送枚举的导航操作。 */
+  /** 发送枚举的导航操作。
+   * @param command 支持的单页面操作。
+   * @param value 仅 navigate 使用的 HTTP(S) 地址。
+   */
   browserCommand(command: 'navigate' | 'back' | 'forward' | 'reload', value?: string): Promise<void>;
-  /** 同步网页逻辑视口与显示版本。 */
+  /** 同步网页逻辑视口与显示版本。
+   * @param request 网页逻辑像素尺寸、可见性及显示版本。
+   */
   presentBrowser(request: BrowserPresentation): void;
-  /** 发送受校验的网页输入。 */
+  /** 发送受校验的网页输入。
+   * @param input 与当前显示版本一致的事件联合。
+   */
   browserInput(input: BrowserInput): void;
-  /** 接收版本化的网页画面。 */
+  /** 接收版本化的网页画面。
+   * @param listener 接收显示版本及 PNG 字节的回调。
+   */
   onBrowserFrame(listener: (frame: { version: number; bytes: Uint8Array }) => void): void;
-  /** 接收导航状态。 */
+  /** 接收导航状态。
+   * @param listener 接收纯数据状态快照的回调。
+   */
   onBrowserState(listener: (state: BrowserState) => void): void;
-  /** 订阅网页功能反馈。 */
+  /** 订阅网页功能反馈。
+   * @param listener 接收纯文本反馈的回调。
+   */
   onBrowserNotice(listener: (message: string) => void): void;
 } } }
 const session = createDesktopSession();

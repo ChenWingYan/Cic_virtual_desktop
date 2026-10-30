@@ -4,7 +4,11 @@ const partition = 'persist:cic-browser';
 /** 仅允许 HTTP(S)，不读取本地文件或启动外部协议。 */
 function isWebURL(value) { try { return ['http:', 'https:'].includes(new URL(value).protocol); } catch { return false; } }
 
-/** 配置独立持久会话，禁止下载和未经授权的权限。 */
+/** 配置独立持久会话，禁止下载和未经授权的权限。
+ * @param {typeof import('electron').session} session Electron 会话工厂，仅主进程使用。
+ * @param {(message: string) => void} notify 向可信桌面发送纯文本操作反馈。
+ * @returns {import('electron').Session} 浏览器独占的持久会话分区。
+ */
 export function configureBrowserSession(session, notify) {
   const browserSession = session.fromPartition(partition);
   browserSession.setPermissionRequestHandler(/* 拒绝并反馈权限申请。 */ (_contents, permission, callback) => { callback(false); notify(`首版暂不支持网站权限：${permission}`); });
@@ -17,7 +21,11 @@ export function configureBrowserSession(session, notify) {
   return browserSession;
 }
 
-/** 以版本化画面和受控输入管理唯一离屏网页，不显示原生网页窗口。 */
+/** 以版本化画面和受控输入管理唯一离屏网页，不显示原生网页窗口。
+ * @param {import('electron').BrowserWindow} window 拥有网页生命周期的可信桌面窗口。
+ * @param {(message: string) => void} notify 发送未支持操作或失败的纯文本提示。
+ * @param {import('electron').Session} browserSession 已安装协议、权限与下载限制的网页会话。
+ */
 export function attachBrowserHost(window, notify, browserSession) {
   let contentWindow, contents, initialization;
   let version = -1, visible = false, failed = false;
@@ -75,7 +83,9 @@ export function attachBrowserHost(window, notify, browserSession) {
       if (!contents || contents.isDestroyed()) throw new Error('浏览器已停止，请重启软件。');
       publish(); return state;
     },
-    /** 同步逻辑视口和显示版本；隐藏时停绘但保留会话。 */
+    /** 同步逻辑视口和显示版本；隐藏时停绘但保留会话。
+     * @param {{width:number,height:number,visible:boolean,version:number}} request 正整数视口和不回退的显示版本。
+     */
     present(request) {
       if (!contents || contents.isDestroyed()) return;
       const { width, height, visible: nextVisible, version: nextVersion } = request;
@@ -85,7 +95,10 @@ export function attachBrowserHost(window, notify, browserSession) {
       if (size[0] !== width || size[1] !== height) contentWindow.setContentSize(width, height);
       if (visible) { contents.startPainting(); contents.invalidate(); } else contents.stopPainting();
     },
-    /** 校验命令与网址，不提供任意脚本接口。 */
+    /** 校验命令与网址，不提供任意脚本接口。
+     * @param {'navigate'|'back'|'forward'|'reload'} command 支持的单页面操作。
+     * @param {string} [value] navigate 所需的 HTTP(S) 网址。
+     */
     async command(command, value) {
       if (!contents || contents.isDestroyed()) throw new Error('浏览器尚未就绪');
       if (command === 'navigate') {
@@ -96,7 +109,9 @@ export function attachBrowserHost(window, notify, browserSession) {
       else if (command === 'reload') contents.reload();
       else throw new Error('不支持的浏览器命令');
     },
-    /** 只接受当前版本的受限坐标、按键、文本及输入法组合。 */
+    /** 只接受当前版本的受限坐标、按键、文本及输入法组合。
+     * @param {import('../../../../../web-ui/src/shared/contracts/browser').BrowserInput} input 带版本号的事件联合，字段按事件类型校验。
+     */
     async input(input) {
       if (!contents || contents.isDestroyed() || !visible || input.version !== version) return;
       const { type } = input;
@@ -110,7 +125,13 @@ export function attachBrowserHost(window, notify, browserSession) {
       if (['keyDown', 'keyUp'].includes(type)) {
         if (typeof input.keyCode !== 'string' || input.keyCode.length > 40) return;
         const modifiers = Array.isArray(input.modifiers) ? input.modifiers.filter(/* 过滤修饰键。 */ key => ['shift', 'control', 'alt', 'meta'].includes(key)) : [];
-        contents.sendInputEvent({ type, keyCode: input.keyCode, modifiers }); return;
+        // DOM 键名属于跨进程契约，Electron 的加速键名称仅在平台适配内转换。
+        const aliases = { ArrowLeft: 'Left', ArrowRight: 'Right', ArrowUp: 'Up', ArrowDown: 'Down', Enter: 'Return', Meta: 'Super' };
+        const keyCode = aliases[input.keyCode] ?? input.keyCode;
+        contents.sendInputEvent({ type, keyCode, modifiers });
+        // 原始 keyDown 不会产生 Enter 的字符默认行为；补 char 保留换行及表单提交。
+        if (type === 'keyDown' && input.keyCode === 'Enter' && !modifiers.some(/* 控制组合键不生成换行。 */ key => ['control', 'alt', 'meta'].includes(key))) contents.sendInputEvent({ type: 'char', keyCode: '\r', modifiers });
+        return;
       }
       if (!['mouseDown', 'mouseUp', 'mouseMove', 'mouseWheel', 'mouseLeave'].includes(type)) return;
       const [width, height] = contentWindow.getContentSize();

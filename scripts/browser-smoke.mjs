@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 await mkdir('artifacts', { recursive: true });
 const profile = await mkdtemp(path.resolve('artifacts/browser-profile-'));
 const videoFixture = await readFile(new URL('../tests/fixtures/sample.webm', import.meta.url));
-const fixture = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>浏览验证页</title><style>body{margin:0;font:20px sans-serif;background:#f5fafc;color:#123}header{padding:24px;background:#d1e9ee}button,a,input{font:inherit;padding:12px;margin:8px}.corner{position:fixed;width:80px;height:50px;margin:0;background:#20b89b;border:0;color:#012}#tl{top:150px;left:12px}#tr{top:150px;right:12px}#bl{bottom:12px;left:12px}#br{bottom:12px;right:12px}#scroll{height:1800px;padding:24px}#edit{width:300px}.drag{position:fixed;left:150px;bottom:30px;padding:15px;background:#afd}#drop{left:360px;background:#fea}</style><header><h1>真实网页 · 输入验证</h1><a id="next" href="/second">下一页</a><a id="popup" href="/second?popup" target="_blank">新窗口链接</a><a id="download" href="/download">下载文件</a><input type="file" id="upload"><input id="edit" placeholder="输入文字"></header><button id="tl" class="corner">左上</button><button id="tr" class="corner">右上</button><button id="bl" class="corner">左下</button><button id="br" class="corner">右下</button><div draggable="true" id="drag" class="drag">拖动</div><div id="drop" class="drag">放置区</div><div id="scroll">滚动区域<p id="result"></p></div><script>window.hits=[];for(const id of ['tl','tr','bl','br'])document.getElementById(id).onclick=()=>{window.hits.push(id);document.getElementById(id).style.background='#f90'};document.getElementById('drag').ondragstart=e=>e.dataTransfer.setData('text/plain','ok');document.getElementById('drop').ondragover=e=>e.preventDefault();document.getElementById('drop').ondrop=e=>{e.preventDefault();window.dropped=e.dataTransfer.getData('text/plain')};</script></html>`;
+const fixture = `<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>浏览验证页</title><style>body{margin:0;font:20px sans-serif;background:#f5fafc;color:#123}header{padding:24px;background:#d1e9ee}button,a,input{font:inherit;padding:12px;margin:8px}.corner{position:fixed;width:80px;height:50px;margin:0;background:#20b89b;border:0;color:#012}#tl{top:150px;left:12px}#tr{top:150px;right:12px}#bl{bottom:12px;left:12px}#br{bottom:12px;right:12px}#scroll{height:1800px;padding:24px}#edit{width:300px}.drag{position:fixed;left:150px;bottom:30px;padding:15px;background:#afd}#drop{left:360px;background:#fea}</style><header><h1>真实网页 · 输入验证</h1><a id="next" href="/second">下一页</a><a id="popup" href="/second?popup" target="_blank">新窗口链接</a><a id="download" href="/download">下载文件</a><input type="file" id="upload"><input id="edit" placeholder="输入文字"></header><button id="tl" class="corner">左上</button><button id="tr" class="corner">右上</button><button id="bl" class="corner">左下</button><button id="br" class="corner">右下</button><div draggable="true" id="drag" class="drag">拖动</div><div id="drop" class="drag">放置区</div><div id="scroll">滚动区域<p id="result"></p></div><script>window.hits=[];for(const id of ['tl','tr','bl','br'])document.getElementById(id).onclick=/* 记录真实命中并改变颜色。 */()=>{window.hits.push(id);document.getElementById(id).style.background='#f90'};document.getElementById('drag').ondragstart=/* 写入网页内部拖动数据。 */e=>e.dataTransfer.setData('text/plain','ok');document.getElementById('drop').ondragover=/* 允许网页接收内部拖放。 */e=>e.preventDefault();document.getElementById('drop').ondrop=/* 记录实际到达的拖放数据。 */e=>{e.preventDefault();window.dropped=e.dataTransfer.getData('text/plain')};</script></html>`;
 const server = createServer(/* 提供不依赖外网的真实网页及下载响应。 */ (request, response) => {
   if (request.url === '/video') { response.writeHead(200, { 'Content-Type': 'video/webm' }); response.end(videoFixture); return; }
   if (request.url === '/download') {
@@ -50,7 +50,7 @@ async function until(read, expected = true) {
 }
 /** 将网页内部坐标通过真实画布矩阵变换为输出层坐标。 */
 async function outputPoint(selector) {
-  const point = await guest(`(()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
+  const point = await guest(`(/* 读取目标的网页逻辑坐标。 */()=>{const r=document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`);
   return page.evaluate(/* 使用当前显示计划定位实际鼠标输入。 */ ({ x, y }) => {
     const canvas = document.querySelector('#canvas');
     let element = document.querySelector('#browser-web');
@@ -102,6 +102,25 @@ try {
   await page.locator('#browser-home').click(); await page.locator('#open-browser').click();
   assert.match(await guest('document.querySelector("#edit").value'), /中文验证/);
   await guest('window.scrollTo(0,0)');
+  await guest(`(()=>{ /* 准备真实网页中的多行编辑与提交目标。 */
+    const editor=document.createElement('textarea');editor.id='multiline';editor.style.cssText='position:fixed;left:300px;top:350px;width:240px;height:80px';document.body.append(editor);
+    const form=document.createElement('form');form.style.cssText='position:fixed;left:550px;top:350px';form.innerHTML='<input id="submit-input"><button>提交</button>';
+    form.onsubmit=/* 记录实际表单提交次数。 */event=>{event.preventDefault();window.submitted=(window.submitted||0)+1};document.body.append(form);
+  })()`);
+  await clickGuest('#multiline');
+  await page.keyboard.type('ab'); await page.keyboard.press('ArrowLeft'); await page.keyboard.type('x');
+  await page.keyboard.press('Enter'); await page.keyboard.type('c');
+  await until(/* 方向键与 Enter 必须改变网页中的真实选区及文本。 */ () => guest('document.querySelector("#multiline").value'), 'ax\ncb');
+  await page.keyboard.press('Home'); await page.keyboard.press('Delete'); await page.keyboard.press('End'); await page.keyboard.press('Backspace');
+  await until(/* 核对光标移动及删除键的默认行为。 */ () => guest('document.querySelector("#multiline").value'), 'ax\n');
+  await page.keyboard.press('Control+a');
+  await page.locator('#browser-input').dispatchEvent('compositionstart', { data: '' });
+  await page.locator('#browser-input').dispatchEvent('compositionupdate', { data: '拼' });
+  await page.keyboard.insertText('拼音');
+  await page.locator('#browser-input').dispatchEvent('compositionend', { data: '拼音' });
+  await until(/* 仅验证组合协议与提交排序，不冒充原生输入法验收。 */ () => guest('document.querySelector("#multiline").value'), '拼音');
+  await clickGuest('#submit-input'); await page.keyboard.type('query'); await page.keyboard.press('Enter');
+  await until(/* Enter 仍应触发表单默认提交。 */ () => guest('window.submitted'), 1);
   const dragStart = await outputPoint('#drag'); const dragEnd = await outputPoint('#drop');
   await page.mouse.move(dragStart.x, dragStart.y); await page.mouse.down();
   await page.mouse.move(dragEnd.x, dragEnd.y, { steps: 15 }); await page.mouse.up();
@@ -116,11 +135,11 @@ try {
   await page.getByRole('button', { name: '刷新', exact: true }).click();
   await until(/* 刷新后网页仍可读取。 */ () => guest('document.title'), '第二页');
   await navigate(`${base}/fixture`); await until(/* 等待验证页。 */ () => guest('document.title'), '浏览验证页');
-  await guest(`new Promise((resolve,reject)=>{
-    const deadline=setTimeout(()=>reject(new Error('video fixture timeout')),8000);
+  await guest(`new Promise(/* 限时验证真实视频播放。 */(resolve,reject)=>{
+    const deadline=setTimeout(/* 视频加载超时即失败。 */()=>reject(new Error('video fixture timeout')),8000);
     const video=document.createElement('video');video.id='test-video';video.muted=true;video.loop=true;
     video.style.cssText='position:fixed;left:600px;top:350px;width:120px;height:80px';document.body.append(video);
-    video.src='/video';video.play().then(()=>{clearTimeout(deadline);resolve(true)},reject);
+    video.src='/video';video.play().then(/* 视频播放开始后完成准备。 */()=>{clearTimeout(deadline);resolve(true)},reject);
   })`);
   await until(/* 验证视频播放时间确实前进。 */ () => guest('document.querySelector("#test-video").currentTime>0.1'));
   const videoPixel = await page.locator('#browser-web').evaluate(/* 读取离屏合成后的视频像素。 */ canvas => canvas.getContext('2d').getImageData(650, 390, 1, 1).data[0]);
@@ -144,10 +163,10 @@ try {
   assert.equal(await guest('location.href'), 'about:blank');
   // 先访问不设置 Cookie 的路径，避免把重启后的新 Cookie 当成持久化结果。
   await navigate(`${base}/cookie-check`); await until(/* 检查重启前的 Cookie。 */ () => guest('document.cookie.includes("cic_browser=retained")'));
-  const frames = await guest('new Promise(resolve=>{const frames=[];let previous;function tick(now){if(previous!==undefined)frames.push(now-previous);previous=now;if(frames.length<30)requestAnimationFrame(tick);else resolve(frames)}requestAnimationFrame(tick)})');
+  const frames = await guest('new Promise(/* 采样当前网页帧间隔。 */resolve=>{const frames=[];let previous;/* 记录逐帧间隔并完成采样。 */function tick(now){if(previous!==undefined)frames.push(now-previous);previous=now;if(frames.length<30)requestAnimationFrame(tick);else resolve(frames)}requestAnimationFrame(tick)})');
   const metrics = await app.evaluate(/* 记录本机原型进程资源，不冒充目标设备测量。 */ ({ app }) => app.getAppMetrics());
   assert.deepEqual(errors, []);
-  await writeFile('artifacts/browser-smoke.json', JSON.stringify({ result: 'passed', orientations: [0, 90, 180, 270], compensation: [0.8, 1.2], clicks: 16, unicodeText: true, nativeIME: 'not tested', dragDrop: true, wheel: true, video: 'WebM playback and changing composited pixels', popup: 'same page', uploadDownload: 'blocked', cookiesAcrossRestart: true, frameIntervalsMs: frames, automationClickRoundtripMs: inputTimings, metrics, deviceValidation: 'not performed', rendererErrors: errors }, null, 2));
+  await writeFile('artifacts/browser-smoke.json', JSON.stringify({ result: 'passed', orientations: [0, 90, 180, 270], compensation: [0.8, 1.2], clicks: 16, unicodeText: true, keyboardEditing: 'arrow, Home/End, Delete/Backspace, textarea newline and form Enter', compositionProtocol: true, nativeIME: 'not tested', dragDrop: true, wheel: true, video: 'WebM playback and changing composited pixels', popup: 'same page', uploadDownload: 'blocked', cookiesAcrossRestart: true, frameIntervalsMs: frames, automationClickRoundtripMs: inputTimings, metrics, deviceValidation: 'not performed', rendererErrors: errors }, null, 2));
   console.log('Browser smoke passed: 4 orientations, 16 webpage hits, navigation, text, wheel, drag, popup, file guards, cookie restart.');
 } catch (error) {
   if (page && !page.isClosed()) {

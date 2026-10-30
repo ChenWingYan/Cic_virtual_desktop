@@ -1,8 +1,10 @@
 import { normalizeAddress } from './url';
 import { mapOutputInput, type DisplayPlan } from '../../display-geometry/public/api';
-import type { BrowserInput, BrowserState } from '../../../shared/contracts/browser';
+import type { BrowserInputPayload, BrowserState } from '../../../shared/contracts/browser';
 
-/** 创建持久浏览器面板；网页通过离屏帧与受限输入契约接入。 */
+/** 创建持久浏览器面板；网页通过离屏帧与受限输入契约接入。
+ * @param returnHome 请求桌面会话返回主页，不销毁网页。
+ */
 export function createBrowserPanel(returnHome: () => void) {
   const element = document.createElement('section'); element.id = 'browser-panel';
   element.innerHTML = `<header class="browser-toolbar"><button id="browser-home">← 返回桌面</button><button id="browser-back" aria-label="后退" disabled>←</button><button id="browser-forward" aria-label="前进" disabled>→</button><button id="browser-reload" aria-label="刷新" disabled>↻</button><form id="browser-address-form"><input id="browser-address" aria-label="网页地址" placeholder="输入网址，例如 https://example.com" autocomplete="off" spellcheck="false" inputmode="url" disabled><button id="browser-go" disabled>访问</button></form></header><div id="browser-status" role="status" aria-live="polite">正在准备浏览器…</div><div class="browser-viewport"><canvas id="browser-web" aria-label="网页内容"></canvas><textarea id="browser-input" aria-label="网页输入" autocomplete="off" spellcheck="false"></textarea><div id="browser-welcome"><div class="welcome-symbol">◎</div><h1>开始浏览</h1><p>在上方输入网页地址，打开你需要的网站。</p><p class="welcome-note">返回桌面后，可随时继续当前网页。</p></div></div>`;
@@ -17,6 +19,7 @@ export function createBrowserPanel(returnHome: () => void) {
   const welcome = element.querySelector<HTMLElement>('#browser-welcome')!;
   let plan: DisplayPlan | undefined;
   let ready = false, visible = true, hasPage = false, decoding = false;
+  let composing = false;
   let lastNavigation = '';
   let lastPoint = { x: 0, y: 0 };
   let heldButton: string | undefined;
@@ -24,7 +27,7 @@ export function createBrowserPanel(returnHome: () => void) {
   /** 安全显示来自网页或主进程的文字。 */
   function notice(message: string): void { status.textContent = message; }
   /** 仅发送当前计划版本的输入。 */
-  function send(input: Omit<BrowserInput, 'version'>): void { if (ready && visible && plan) window.desktop.browserInput({ ...input, version: plan.version }); }
+  function send(input: BrowserInputPayload): void { if (ready && visible && plan) window.desktop.browserInput({ ...input, version: plan.version }); }
   /** 同步网页逻辑视口；画布像素由离屏内容自行绘制。 */
   function present(): void {
     if (!ready || !plan) return;
@@ -60,6 +63,7 @@ export function createBrowserPanel(returnHome: () => void) {
   /** 离开网页前释放按键和指针，避免网页保留卡住的输入。 */
   function release(): void {
     send({ type: 'cancel' });
+    if (composing) { send({ type: 'composition', text: '' }); composing = false; proxy.value = ''; }
     if (heldButton) send({ ...lastPoint, type: 'mouseUp', button: heldButton });
     for (const keyCode of heldKeys) send({ type: 'keyUp', keyCode });
     heldButton = undefined; heldKeys.clear();
@@ -99,13 +103,14 @@ export function createBrowserPanel(returnHome: () => void) {
     heldKeys.add(keyCode); send({ type: 'keyDown', keyCode, modifiers });
     if (event.key.length > 1 || event.ctrlKey || event.altKey || event.metaKey) event.preventDefault();
   });
-  proxy.addEventListener('keyup', /* 同步按键释放。 */ event => { const keyCode = event.key === ' ' ? 'Space' : event.key; heldKeys.delete(keyCode); send({ type: 'keyUp', keyCode }); });
+  proxy.addEventListener('keyup', /* 同步真实按键释放，忽略输入法内部处理键。 */ event => { if (event.isComposing || event.key === 'Process') return; const keyCode = event.key === ' ' ? 'Space' : event.key; heldKeys.delete(keyCode); send({ type: 'keyUp', keyCode }); });
+  proxy.addEventListener('compositionstart', /* 记录组合态，离开网页时明确取消。 */ () => { composing = true; });
   proxy.addEventListener('compositionupdate', /* 合成文本留在网页当前选区。 */ event => send({ type: 'composition', text: event.data }));
   proxy.addEventListener('paste', /* 只向网页传递纯文本，不传递本机文件。 */ event => {
     event.preventDefault(); const text = event.clipboardData?.getData('text/plain');
     if (text) send({ type: 'text', text });
   });
-  proxy.addEventListener('compositionend', /* 取消输入法时清除组合态。 */ event => { if (!event.data) send({ type: 'composition', text: '' }); });
+  proxy.addEventListener('compositionend', /* 取消输入法时清除组合态。 */ event => { composing = false; if (!event.data) send({ type: 'composition', text: '' }); });
   proxy.addEventListener('input', /* 只提交已完成文本，不重复提交输入法中间结果。 */ event => {
     if ((event as InputEvent).isComposing) return;
     if (proxy.value) send({ type: 'text', text: proxy.value }); proxy.value = '';
@@ -133,9 +138,13 @@ export function createBrowserPanel(returnHome: () => void) {
   }).catch(/* 初始化失败不继续无保护浏览。 */ () => notice('浏览器初始化失败，请退出软件后重试。'));
   return {
     element,
-    /** 隐藏时停绘并释放输入，保留网页 DOM 与历史。 */
+    /** 隐藏时停绘并释放输入，保留网页 DOM 与历史。
+     * @param value 当前面板是否在桌面呈现。
+     */
     setVisible(value: boolean): void { if (!value) release(); visible = value; element.hidden = !value; if (!value && ready && plan) window.desktop.presentBrowser({ width: web.width, height: web.height, visible: false, version: plan.version }); },
-    /** 与桌面使用同一显示计划版本。 */
+    /** 与桌面使用同一显示计划版本。
+     * @param value 已应用于桌面画布的有效显示计划。
+     */
     setPresentation(value: DisplayPlan): void { plan = value; present(); },
   };
 }
