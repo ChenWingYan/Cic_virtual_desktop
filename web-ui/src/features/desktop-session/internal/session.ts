@@ -1,4 +1,5 @@
 import type { DisplayProfile } from '../../../shared/contracts/display';
+import { LOGICAL_SIZE } from '../../../shared/contracts/layout';
 import { createDisplayPlan } from '../../display-geometry/public/api';
 /** 桌面会话的可观察快照。 */
 export interface DesktopState {
@@ -38,7 +39,7 @@ export function createDesktopSession(): DesktopSession {
     returnHome() { state.page = 'home'; },
     /** 原子更新有效配置；失败保留当前画面版本。 */
     applyDisplayProfile(profile) {
-      createDisplayPlan({ logical:{ width:960,height:720 },output:{ width:960,height:720 },profile,version:state.version+1 });
+      createDisplayPlan({ logical:LOGICAL_SIZE,output:LOGICAL_SIZE,profile,version:state.version+1 });
       state = { ...state,profile:{ ...profile },version:state.version+1 };
     },
     /** 无条件恢复软件默认显示，不代表设备校准值。 */

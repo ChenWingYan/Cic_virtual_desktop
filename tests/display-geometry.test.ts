@@ -46,3 +46,13 @@ test('接受内容边界，拒绝输出越界及非有限输入', () => {
   expect(mapOutputInput(plan,{ x:600,y:350 })).toMatchObject({ kind:'hit',point:{ x:200,y:expect.closeTo(100) } });
   for (const point of [{ x:601,y:200 },{ x:300,y:401 },{ x:Infinity,y:0 },{ x:0,y:NaN },{ x:300,y:351 }]) expect(mapOutputInput(plan,point)).toEqual({ kind:'outside' });
 });
+
+// 回归普通小数补偿造成的边界舍入误差，保持有效角点可逆。
+test('小数补偿下正向生成的角点仍可逆映射', () => {
+  const plan = createDisplayPlan({ logical:{ width:960,height:720 },output:{ width:800,height:600 },profile:{ orientation:0,compensationX:0.8,compensationY:0.8,fontScale:1 },version:0 });
+  for (const [x,y] of [[0,0],[960,0],[0,720],[960,720]]) {
+    const [a,b,c,d,e,f] = plan.forward;
+    expect(mapOutputInput(plan,{ x:a*x+c*y+e,y:b*x+d*y+f })).toMatchObject({ kind:'hit',point:{ x:expect.closeTo(x),y:expect.closeTo(y) } });
+  }
+  expect(mapOutputInput(plan,{ x:800.001,y:0 })).toEqual({ kind:'outside' });
+});

@@ -7,7 +7,7 @@ import type { DisplayPlan, DisplayRequest, MappedInput, Matrix, Point } from '..
 export function createDisplayPlan(request: DisplayRequest): DisplayPlan {
   const { logical, output, profile, version } = request;
   const values = [logical.width, logical.height, output.width, output.height, profile.compensationX, profile.compensationY, profile.fontScale];
-  if (!values.every(v => Number.isFinite(v) && v > 0) || ![0, 90, 180, 270].includes(profile.orientation) || !Number.isSafeInteger(version) || version < 0) throw new RangeError('显示参数必须有效且为正数');
+  if (!values.every(/* 校验有限正值。 */ v => Number.isFinite(v) && v > 0) || ![0, 90, 180, 270].includes(profile.orientation) || !Number.isSafeInteger(version) || version < 0) throw new RangeError('显示参数必须有效且为正数');
   const w = logical.width, h = logical.height;
   const rotations: Record<number, Matrix> = { 0: [1,0,0,1,0,0], 90: [0,1,-1,0,h,0], 180: [-1,0,0,-1,w,h], 270: [0,-1,1,0,0,w] };
   const [a,b,c,d,e,f] = rotations[profile.orientation];
@@ -31,11 +31,14 @@ export function createDisplayPlan(request: DisplayRequest): DisplayPlan {
  * @param point 相对输出区域左上角的 CSS 像素位置。
  */
 export function mapOutputInput(plan: DisplayPlan, point: Point): MappedInput {
-  if (![point.x,point.y].every(Number.isFinite) || point.x < 0 || point.y < 0 || point.x > plan.output.width || point.y > plan.output.height) return { kind: 'outside' };
+  // 只容忍相对当前坐标量级的浮点舍入，不扩大可点击范围到实际像素。
+  const outputTolerance = 32 * Number.EPSILON * Math.max(1,plan.output.width,plan.output.height);
+  const logicalTolerance = 32 * Number.EPSILON * Math.max(1,plan.logical.width,plan.logical.height);
+  if (![point.x,point.y].every(Number.isFinite) || point.x < -outputTolerance || point.y < -outputTolerance || point.x > plan.output.width+outputTolerance || point.y > plan.output.height+outputTolerance) return { kind: 'outside' };
   const bounds = plan.contentBounds;
-  if (point.x < bounds.x || point.y < bounds.y || point.x > bounds.x+bounds.width || point.y > bounds.y+bounds.height) return { kind: 'outside' };
+  if (point.x < bounds.x-outputTolerance || point.y < bounds.y-outputTolerance || point.x > bounds.x+bounds.width+outputTolerance || point.y > bounds.y+bounds.height+outputTolerance) return { kind: 'outside' };
   const [a,b,c,d,e,f] = plan.inverse;
   const x = a*point.x+c*point.y+e, y = b*point.x+d*point.y+f;
-  if (![x,y].every(Number.isFinite) || x < -1e-8 || y < -1e-8 || x > plan.logical.width+1e-8 || y > plan.logical.height+1e-8) return { kind: 'outside' };
+  if (![x,y].every(Number.isFinite) || x < -logicalTolerance || y < -logicalTolerance || x > plan.logical.width+logicalTolerance || y > plan.logical.height+logicalTolerance) return { kind: 'outside' };
   return { kind: 'hit', point: { x: Math.max(0, Math.min(plan.logical.width,x)), y: Math.max(0, Math.min(plan.logical.height,y)) } };
 }

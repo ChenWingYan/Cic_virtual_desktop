@@ -3,7 +3,13 @@ import { createDisplayPlan, mapOutputInput, type DisplayPlan } from './features/
 import { createDesktopSession } from './features/desktop-session/public/api';
 import { calibrationMarkup } from './features/calibration/public/api';
 import type { Orientation } from './shared/contracts/display';
-declare global { interface Window { desktop: { quit(): Promise<void>; onReset(listener: () => void): void } } }
+import { LOGICAL_SIZE } from './shared/contracts/layout';
+declare global { interface Window { desktop: {
+  /** 请求主进程退出。 */
+  quit(): Promise<void>;
+  /** 订阅主进程恢复通知。 */
+  onReset(listener: () => void): void;
+} } }
 const session = createDesktopSession();
 const output = document.querySelector<HTMLDivElement>('#output')!;
 const canvas = document.querySelector<HTMLElement>('#canvas')!;
@@ -14,7 +20,9 @@ const hits = new Set<string>();
 function present(): void {
   const state = session.getState();
   if (!output.clientWidth || !output.clientHeight) return;
-  plan = createDisplayPlan({ logical:{ width:960,height:720 },output:{ width:output.clientWidth,height:output.clientHeight },profile:state.profile,version:state.version });
+  plan = createDisplayPlan({ logical:LOGICAL_SIZE,output:{ width:output.clientWidth,height:output.clientHeight },profile:state.profile,version:state.version });
+  canvas.style.width = `${LOGICAL_SIZE.width}px`;
+  canvas.style.height = `${LOGICAL_SIZE.height}px`;
   canvas.style.transform = `matrix(${plan.forward.join(',')})`;
   canvas.style.fontSize = `${16*state.profile.fontScale}px`;
 }
@@ -23,8 +31,8 @@ function render(): void {
   hits.clear();
   const state = session.getState();
   canvas.innerHTML = state.page === 'home' ? `<header><p class="eyebrow">CIC / VIRTUAL DESKTOP</p><h1>虚拟桌面</h1><p>一个工作区，统一方向与显示比例。</p></header><section class="entries"><button id="calibrate"><strong>显示校准 →</strong><span>方向、形状与四角命中</span></button><button disabled>文件管理器 · 待接入</button><button disabled>浏览器 · 待接入</button><button disabled>查验程序 · 待接入</button></section><p class="notice">硬件参数待验证。默认 1/1 仅为软件初值。</p>` : `${calibrationMarkup()}<button id="home">← 返回主页</button>`;
-  canvas.insertAdjacentHTML('beforeend', `<form id="settings"><label>方向 <select id="orientation">${[0,90,180,270].map(v => `<option ${v === state.profile.orientation ? 'selected' : ''}>${v}</option>`).join('')}</select></label><label>横向补偿 <input id="cx" type="number" step="any" value="${state.profile.compensationX}" required></label><label>纵向补偿 <input id="cy" type="number" step="any" value="${state.profile.compensationY}" required></label><button>应用显示</button><p id="error" role="alert"></p></form>`);
-  document.querySelector('#calibrate')?.addEventListener('click', () => { session.activateEntry('calibration'); render(); });
+  canvas.insertAdjacentHTML('beforeend', `<form id="settings"><label>方向 <select id="orientation">${[0,90,180,270].map(/* 生成支持方向的选项。 */ v => `<option ${v === state.profile.orientation ? 'selected' : ''}>${v}</option>`).join('')}</select></label><label>横向补偿 <input id="cx" type="number" step="any" value="${state.profile.compensationX}" required></label><label>纵向补偿 <input id="cy" type="number" step="any" value="${state.profile.compensationY}" required></label><button>应用显示</button><p id="error" role="alert"></p></form>`);
+  document.querySelector('#calibrate')?.addEventListener('click', /* 进入校准并更新画面。 */ () => { session.activateEntry('calibration'); render(); });
   document.querySelector('#home')?.addEventListener('click', home);
   document.querySelector('#settings')!.addEventListener('submit', apply);
   present();
@@ -34,7 +42,7 @@ function apply(event: Event): void {
   event.preventDefault();
   const profile = { ...session.getState().profile,orientation:Number((document.querySelector('#orientation') as HTMLSelectElement).value) as Orientation,compensationX:Number((document.querySelector('#cx') as HTMLInputElement).value),compensationY:Number((document.querySelector('#cy') as HTMLInputElement).value) };
   try {
-    createDisplayPlan({ logical:{ width:960,height:720 },output:{ width:output.clientWidth,height:output.clientHeight },profile,version:session.getState().version+1 });
+    createDisplayPlan({ logical:LOGICAL_SIZE,output:{ width:output.clientWidth,height:output.clientHeight },profile,version:session.getState().version+1 });
     session.applyDisplayProfile(profile); render();
   } catch { document.querySelector('#error')!.textContent = '请输入有限的正补偿值；当前显示已保留。'; }
 }
@@ -56,8 +64,8 @@ output.addEventListener('click', event => {
   document.querySelector('#hit-status')!.textContent = `四角命中：${hits.size} / 4`;
 });
 document.querySelector('#reset')!.addEventListener('click',reset);
-document.querySelector('#quit')!.addEventListener('click', () => window.desktop.quit());
-document.addEventListener('keydown', event => { if (event.key === 'Escape') home(); if (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'r') reset(); });
+document.querySelector('#quit')!.addEventListener('click', /* 请求可信外壳退出。 */ () => window.desktop.quit());
+document.addEventListener('keydown', /* 处理返回与恢复快捷键。 */ event => { if (event.key === 'Escape') home(); if (event.ctrlKey && event.altKey && event.key.toLowerCase() === 'r') reset(); });
 window.desktop?.onReset(reset);
 window.addEventListener('resize',present);
 render();
