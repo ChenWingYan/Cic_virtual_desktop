@@ -30,3 +30,5 @@ npm start
 当前实现范围见[校准切片说明](docs/calibration-slice.md)及[浏览器切片说明](docs/browser-slice.md)。首页提供三个磁贴，浏览器支持单页面导航和返回桌面保留网页；文件管理器和业务软件仍待接入。浏览器采用可替换的离屏合成原型，尚未确认为生产渲染路线。
 
 `npm run smoke:browser` 验证真实网页在四方向及补偿下的点击、文字、滚动、拖拽、视频、单页面导航、文件操作拦截与重启 Cookie。测试使用独立数据目录和本机随机端口，生成 `artifacts/browser-smoke.json` 及截图。原生中文输入法、候选框和目标设备性能仍须现场验证。
+
+浏览器切片的执行证据与两轴独立审查见[验证记录](docs/browser-verification.md)。
