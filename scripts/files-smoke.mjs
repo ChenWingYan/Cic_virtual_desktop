@@ -69,6 +69,11 @@ try {
   await page.screenshot({path:'artifacts/files-list.png'});
   const protectedResult = await page.evaluate(/* 验证真实 IPC 不能绕过自身保护，不创建或删除应用文件。 */ () => window.desktop.fileOperation({kind:'mkdir',directory:location.pathname.replace(/^\//,'').replace(/\/dist\/index.html$/,''),name:'should-not-exist'}));
   assert.match(protectedResult.error,/自身文件保护/);
+  const installation = await app.evaluate(/* 打包态还需保护外层 EXE 和运行时目录。 */ ({app}) => ({ packaged:app.isPackaged, executable:process.execPath }));
+  if (installation.packaged) {
+    const runtimeResult = await page.evaluate(/* 仅尝试创建不存在项，断言安装根目录阻止写入。 */ directory => window.desktop.fileOperation({kind:'mkdir',directory,name:'should-not-exist'}),path.dirname(installation.executable));
+    assert.match(runtimeResult.error,/自身文件保护/);
+  }
   const untrusted = await app.evaluate(/* 通过实际外部框架对象验证主进程拒绝非桌面来源。 */ async ({BrowserWindow,ipcMain}) => {
     const guest = new BrowserWindow({show:false,webPreferences:{sandbox:true}}); await guest.loadURL('about:blank');
     const handler = ipcMain._invokeHandlers.get('files:operate');
@@ -76,7 +81,7 @@ try {
     catch { return true; } finally { guest.destroy(); }
   });
   assert.equal(untrusted,true); assert.deepEqual(errors,[]);
-  await fs.writeFile('artifacts/files-smoke.json',JSON.stringify({result:'passed',externalCreateLatencyMs:timings,metadata:true,rename:true,selectionPreserved:true,scrollPreserved:true,copy:true,conflictKeepBoth:true,renameOperation:true,recycleBin:true,selfProtection:true,untrustedSourceRejected:true,orientations:[0,90,180,270],usbHardware:'not tested',rendererErrors:errors},null,2));
+  await fs.writeFile('artifacts/files-smoke.json',JSON.stringify({result:'passed',packaged:installation.packaged,installationProtection:installation.packaged ? 'passed' : 'requires packaged run',externalCreateLatencyMs:timings,metadata:true,rename:true,selectionPreserved:true,scrollPreserved:true,copy:true,conflictKeepBoth:true,renameOperation:true,recycleBin:true,selfProtection:true,untrustedSourceRejected:true,orientations:[0,90,180,270],usbHardware:'not tested',rendererErrors:errors},null,2));
   console.log('Files smoke passed: real filesystem refresh, operations, conflicts, recycle bin, protection, selection, scroll, four orientations.');
 } catch (error) { if (page && !page.isClosed()) await page.screenshot({path:'artifacts/files-failure.png'}); throw error; }
 finally { await app.close(); await fs.rm(base,{recursive:true,force:true}); }

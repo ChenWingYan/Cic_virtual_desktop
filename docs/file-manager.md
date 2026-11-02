@@ -20,7 +20,7 @@
 
 ## 自身文件保护与契约
 
-主进程保护应用根目录（开发态为项目目录）、Electron userData、sessionData 和 logs 的实际位置。允许浏览及复制普通自身文件出来，禁止写入、删除、移动、改名及通过上级目录破坏它们。平台访问位置通过 `app.getPath` 获取。开发及测试使用 `CIC_DESKTOP_DATA_DIR` 隔离运行数据。
+主进程保护应用根目录（开发态为项目目录；打包后同时保护可执行文件所在安装目录及 resources/app）、Electron userData、sessionData 和 logs 的实际位置。允许浏览及复制普通自身文件出来，禁止写入、删除、移动、改名及通过上级目录破坏它们。平台访问位置通过 `app.getPath` 获取。开发及测试使用 `CIC_DESKTOP_DATA_DIR` 隔离运行数据。
 
 `app-shell/src/modules/local-files/public/api.js` 暴露 `createLocalFiles`。主进程提供本地根目录、受保护路径、回收站及确认回调；服务提供 `open`、`close`、`subscribe`、`list`、`operate`。界面从 `features/file-browser/public/api.ts` 创建面板，跨进程使用 `shared/contracts/files.ts` 的纯数据类型。
 

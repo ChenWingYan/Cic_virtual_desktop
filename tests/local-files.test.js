@@ -64,6 +64,17 @@ describe('本机文件管理公开契约', /* 通过公开入口验证文件行�
     expect((await service.operate({kind:'move',sources:[renamed],directory:target})).error).toBe('');
     await expect(fs.stat(renamed)).rejects.toMatchObject({code:'ENOENT'});
   });
+  it('重命名完成后发布最终目录，不残留已删除的旧名称', /* 验证自身操作完成时列表可以安全继续操作。 */ async () => {
+    const values = []; service.subscribe(/* 记录服务发布的目录状态。 */ value => values.push(value));
+    await fs.writeFile(path.join(base,'before.txt'),'rename'); await service.open(base);
+    for (let index=0;index<10;index++) {
+      const oldName = index === 0 ? 'before.txt' : `after-${index-1}.txt`, newName = `after-${index}.txt`;
+      const result = await service.operate({kind:'rename',sources:[path.join(base,oldName)],name:newName});
+      expect(result.error).toBe('');
+      const names = values.at(-1).directory.entries.map(/* 读取当前可操作项目名称。 */ entry => entry.name);
+      expect(names).toContain(newName); expect(names).not.toContain(oldName);
+    }
+  });
   it('逐项处理目录合并冲突，支持跳过、保留两份、覆盖', /* 在独立临时目录验证当前场景。 */ async () => {
     const from = path.join(base,'from'), to = path.join(base,'to');
     await fs.mkdir(path.join(from,'folder'),{recursive:true}); await fs.mkdir(path.join(to,'folder'),{recursive:true});

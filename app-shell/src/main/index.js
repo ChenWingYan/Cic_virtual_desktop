@@ -28,7 +28,9 @@ function shortcut(event, input) {
 /** 创建单屏全屏窗口，仅加载本地可信内容并拒绝外部导航和权限。 */
 async function createWindow() {
   drives = discoverLocalDrives();
-  files = createLocalFiles({ roots:drives.roots, protectedPaths:[root,app.getPath('userData'),app.getPath('logs'),app.getPath('sessionData')], trash: shell.trashItem, ask:askFileQuestion });
+  // 打包后 root 位于 resources/app；同时保护外层可执行文件和 Electron 运行时。
+  const installation = app.isPackaged ? path.dirname(process.execPath) : root;
+  files = createLocalFiles({ roots:drives.roots, protectedPaths:[installation,root,app.getPath('userData'),app.getPath('logs'),app.getPath('sessionData')], trash: shell.trashItem, ask:askFileQuestion });
   files.subscribe(/* 只向可信桌面发布文件快照。 */ snapshot => { if (window && !window.isDestroyed()) window.webContents.send('files:snapshot',snapshot); });
   session.defaultSession.setPermissionRequestHandler(/* 拒绝页面权限申请。 */ (_contents,_permission,callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(/* 拒绝页面权限检查。 */ () => false);

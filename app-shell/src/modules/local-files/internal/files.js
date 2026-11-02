@@ -85,7 +85,7 @@ export function createLocalFiles({ roots, protectedPaths, trash, ask }) {
   }
   /** 每次核对同时获取磁盘和当前目录，轮询补偿系统通知丢失。 */
   async function refresh() {
-    if (pollBusy) return;
+    if (pollBusy || busy) return;
     pollBusy = true;
     const version = generation, target = active;
     try {
@@ -97,7 +97,7 @@ export function createLocalFiles({ roots, protectedPaths, trash, ask }) {
       }
       const value = { roots:locations, directory, error };
       const signature = JSON.stringify(value);
-      if (version === generation && signature !== last) { last = signature; emit(value); }
+      if (!busy && version === generation && signature !== last) { last = signature; emit(value); }
     } catch (failure) { if (version === generation) emit({ error:`刷新失败：${failure.message}` }); }
     finally { pollBusy = false; }
   }
@@ -105,7 +105,7 @@ export function createLocalFiles({ roots, protectedPaths, trash, ask }) {
   async function operate(request) {
     if (busy) throw new Error('已有文件操作正在进行。');
     if (!request || !['mkdir','rename','copy','move','delete'].includes(request.kind)) throw new Error('文件操作无效。');
-    busy = true;
+    busy = true; generation++;
     const result = { completed:[], skipped:[], error:'' };
     try {
       if (request.kind === 'mkdir') {
@@ -155,7 +155,11 @@ export function createLocalFiles({ roots, protectedPaths, trash, ask }) {
         }
       }
     } catch (failure) { result.error = failure.message; }
-    finally { busy = false; last = ''; await refresh(); }
+    finally {
+      // 等旧核对结束后发布最终状态，不能把重命名中间态当作可操作列表。
+      while (pollBusy) await new Promise(/* 等待已有只读核对释放，不阻塞事件循环。 */ resolve => setTimeout(resolve,10));
+      busy = false; last = ''; await refresh();
+    }
     return result;
   }
   /** 逐项合并目录，冲突逐项提问；跨盘移动只删除已成功复制的源文件。 */
