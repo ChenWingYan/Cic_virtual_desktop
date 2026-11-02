@@ -27,4 +27,4 @@ npm start
 - [架构取舍](docs/adr/0001-managed-content-and-public-contracts.md)
 - [实施规格与六项后续任务](https://github.com/ChenWingYan/Cic_virtual_desktop/issues/1)
 
-当前实现范围见[校准切片说明](docs/calibration-slice.md)。文件、浏览器和查验能力尚未接入；实体屏显示校正仍待现场验证。
+当前实现范围见[校准切片说明](docs/calibration-slice.md)和[独立查验产物接入说明](docs/inspection-integration.md)。查验主屏已接入原型；文件和浏览器入口仍待接入，实体屏显示校正仍待现场验证。

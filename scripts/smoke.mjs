@@ -12,7 +12,7 @@ try {
   await page.getByRole('heading',{ name:'虚拟桌面',exact:true }).waitFor();
   assert.equal(await app.evaluate(/* 检查真实窗口全屏。 */ ({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isFullScreen()),true);
   assert.equal(await page.evaluate(/* 确认未暴露 Node。 */ () => typeof window.require),'undefined');
-  assert.deepEqual(await page.evaluate(/* 检查桥的能力范围。 */ () => Object.keys(window.desktop).sort()),['onReset','quit']);
+  assert.deepEqual(await page.evaluate(/* 检查桥的能力范围。 */ () => Object.keys(window.desktop).sort()),['inspection','onReset','quit']);
   await page.screenshot({ path:'artifacts/home.png' });
   await page.getByRole('button',{ name:'显示校准' }).click();
   for (const orientation of [0,90,180,270]) {

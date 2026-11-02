@@ -4,7 +4,7 @@ import { createDisplayPlan } from '../../display-geometry/public/api';
 /** 桌面会话的可观察快照。 */
 export interface DesktopState {
   /** 当前受管理页面。 */
-  page: 'home' | 'calibration';
+  page: 'home' | 'calibration' | 'inspection';
   /** 当前有效显示配置。 */
   profile: DisplayProfile;
   /** 每次成功配置更新递增。 */
@@ -15,9 +15,9 @@ export interface DesktopSession {
   /** 返回独立状态快照。 */
   getState(): DesktopState;
   /** 进入支持的受管理内容。
-   * @param entry 当前仅支持校准入口。
+   * @param entry 校准或独立查验内容入口。
    */
-  activateEntry(entry: 'calibration'): void;
+  activateEntry(entry: 'calibration' | 'inspection'): void;
   /** 返回主页并保留显示配置。 */
   returnHome(): void;
   /** 先校验再更新配置，失败保留当前版本。
@@ -34,7 +34,7 @@ export function createDesktopSession(): DesktopSession {
     /** 返回独立快照，禁止调用者修改会话。 */
     getState() { return { ...state,profile:{ ...state.profile } }; },
     /** 激活首期支持的校准入口。 */
-    activateEntry(entry) { if (entry !== 'calibration') throw new RangeError('入口尚未接入'); state.page = entry; },
+    activateEntry(entry) { if (!['calibration','inspection'].includes(entry)) throw new RangeError('入口尚未接入'); state.page = entry; },
     /** 返回主页，保留当前显示配置。 */
     returnHome() { state.page = 'home'; },
     /** 原子更新有效配置；失败保留当前画面版本。 */
