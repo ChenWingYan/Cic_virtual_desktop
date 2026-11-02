@@ -37,6 +37,8 @@ npm run smoke:inspection
 
 `scripts/inspection-smoke.mjs` 在真实 Electron 中测试四方向与非等比补偿下的实际按钮、文字/编辑键、滚轮、无设备视频探针、返回后 PID 保持、拖出释放、故障提示保持、确认/取消重启和退出清理。截图和 JSON 保存在 `artifacts/inspection-*`。启动独立业务实例后加 `--occupied` 可验证保留外部进程。
 
+2026-11-02：35项测试、类型检查、构建及校准、浏览器、文件管理器、查验组合 Electron 验证通过。组合验证包含运行查验时进入浏览器和文件管理器再返回、Enter/Escape 转发、几何变化取消输入；原生重启对话框的选择由测试模拟。详见[本轮运行记录](../dsh/run/records/2026-11-02-inspection-host-implementation.md)。
+
 ## 当前限制
 
 - 帧管线为 PNG 数据传输，上限 15 FPS；这不是生产性能保证。视频探针验证的是画面能传输，不证明真实相机预览或设备性能已达标。
