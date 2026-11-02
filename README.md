@@ -34,3 +34,5 @@ npm start
 浏览器切片的执行证据与两轴独立审查见[验证记录](docs/browser-verification.md)。
 
 `npm run smoke:files` 验证真实文件变化、复制和改名、冲突选择、回收站、自身保护及四方向文件界面，生成 `artifacts/files-smoke.json` 和截图。U 盘插拔及目标设备延迟仍需现场验证。
+
+文件管理器的执行证据与两轴独立审查见[验证记录](docs/file-manager-verification.md)。

@@ -19,7 +19,7 @@ async function exists(target) {
 }
 /** 创建本机文件服务；系统路径、回收站和提问由平台提供。 */
 export function createLocalFiles({ roots, protectedPaths, trash, ask }) {
-  let active = '', watcher, timer, pollBusy = false, last = '', busy = false;
+  let active = '', watcher, timer, pollBusy = false, last = '', busy = false, notice = '';
   let generation = 0;
   const listeners = new Set();
   /** 发布纯数据快照。 */
@@ -90,10 +90,10 @@ export function createLocalFiles({ roots, protectedPaths, trash, ask }) {
     const version = generation, target = active;
     try {
       const locations = await roots();
-      let directory = null, error = '';
+      let directory = null, error = notice;
       if (target) {
         try { directory = await list(target); }
-        catch (failure) { error = `目录不可访问，已返回此电脑：${failure.message}`; if (version === generation) { active = ''; watcher?.close(); watcher = undefined; } }
+        catch (failure) { error = `目录不可访问，已返回此电脑：${failure.message}`; if (version === generation) { notice = error; active = ''; watcher?.close(); watcher = undefined; } }
       }
       const value = { roots:locations, directory, error };
       const signature = JSON.stringify(value);
@@ -205,7 +205,13 @@ export function createLocalFiles({ roots, protectedPaths, trash, ask }) {
     subscribe(listener) { listeners.add(listener); return /* 释放当前订阅。 */ () => listeners.delete(listener); },
     /** 切换目录时替换监听；返回文件管理器时强制重新核对。 */
     async open(target = '') {
-      generation++; watcher?.close(); watcher = undefined; active = target ? await allowed(target) : ''; last = '';
+      generation++; watcher?.close(); watcher = undefined; notice = ''; last = '';
+      try { active = target ? await allowed(target) : ''; }
+      catch (failure) {
+        active = ''; notice = `目录不可访问，已返回此电脑：${failure.message}`;
+        // 即使旧核对尚在执行，也立即清除界面过期位置；周期核对随后恢复盘符。
+        emit({ directory:null,error:notice });
+      }
       if (active) {
         try { const subscription = watch(active, /* 系统事件触发快速核对。 */ () => { void refresh(); }); watcher = subscription; subscription.on('error', /* 只关闭发生错误的旧监听，轮询继续有效。 */ () => { subscription.close(); if (watcher === subscription) watcher = undefined; }); } catch { /* 轮询负责不可监听的目录。 */ }
       }
