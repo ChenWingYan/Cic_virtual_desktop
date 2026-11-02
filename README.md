@@ -5,7 +5,7 @@
 项目重点是解决实体屏幕与系统输出的方向、宽高比不匹配问题。通过软件内旋转和比例补偿，使桌面、网页及业务界面在实体屏上正常显示，并保持点击位置准确。
 
 - [项目目标与实施边界](dsh/feature/docs/project-goals.md)
-- 当前阶段：校准切片已合并；磁贴桌面与内置浏览器原型已实现，网页的设备验证待完成。
+- 当前阶段：校准切片已合并；磁贴桌面、内置浏览器及实时本机文件管理已实现，目标设备验证待完成。
 - 架构方向：参考 `CustomInspectCounter_NewTypeDemo`，采用 Electron JavaScript 外壳和 Vite TypeScript 界面；按需接入 C++20 能力及现有业务后端。
 
 运行要求：Node.js >=22.12、Windows。首次安装 Electron 需要下载运行时。
@@ -27,8 +27,10 @@ npm start
 - [架构取舍](docs/adr/0001-managed-content-and-public-contracts.md)
 - [实施规格与六项后续任务](https://github.com/ChenWingYan/Cic_virtual_desktop/issues/1)
 
-当前实现范围见[校准切片说明](docs/calibration-slice.md)及[浏览器切片说明](docs/browser-slice.md)。首页提供三个磁贴，浏览器支持单页面导航和返回桌面保留网页；文件管理器和业务软件仍待接入。浏览器采用可替换的离屏合成原型，尚未确认为生产渲染路线。
+当前实现范围见[校准切片说明](docs/calibration-slice.md)、[浏览器切片说明](docs/browser-slice.md)及[文件管理器说明](docs/file-manager.md)。首页提供三个磁贴，浏览器支持单页面导航和返回桌面保留网页；文件管理器支持本地磁盘、U 盘、实时刷新及受自身文件保护约束的文件操作；业务软件仍待接入。浏览器采用可替换的离屏合成原型，尚未确认为生产渲染路线。
 
 `npm run smoke:browser` 验证真实网页在四方向及补偿下的点击、文字、滚动、拖拽、视频、单页面导航、文件操作拦截与重启 Cookie。测试使用独立数据目录和本机随机端口，生成 `artifacts/browser-smoke.json` 及截图。原生中文输入法、候选框和目标设备性能仍须现场验证。
 
 浏览器切片的执行证据与两轴独立审查见[验证记录](docs/browser-verification.md)。
+
+`npm run smoke:files` 验证真实文件变化、复制和改名、冲突选择、回收站、自身保护及四方向文件界面，生成 `artifacts/files-smoke.json` 和截图。U 盘插拔及目标设备延迟仍需现场验证。

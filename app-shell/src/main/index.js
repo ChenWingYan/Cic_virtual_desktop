@@ -1,4 +1,7 @@
-import { app, BrowserWindow, ipcMain, session } from 'electron';
+import { app, BrowserWindow, ipcMain, session, shell } from 'electron';
+import { randomUUID } from 'node:crypto';
+import { createLocalFiles } from '../modules/local-files/public/api.js';
+import { discoverLocalDrives } from '../modules/local-files/public/windows.js';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import path from 'node:path';
 import { configureBrowserSession, attachBrowserHost } from '../modules/content-host/public/api.js';
@@ -6,6 +9,8 @@ const root = fileURLToPath(new URL('../../../', import.meta.url));
 const trustedURL = pathToFileURL(path.join(root,'dist/index.html')).href;
 let window;
 let browserHost;
+let files, drives;
+const fileQuestions = new Map();
 let browserInputQueue = Promise.resolve();
 // 冒烟测试使用独立数据目录，避免占用现场校准程序的 Cookie 和进程锁。
 if (process.env.CIC_DESKTOP_DATA_DIR) app.setPath('userData', path.resolve(process.env.CIC_DESKTOP_DATA_DIR));
@@ -22,6 +27,9 @@ function shortcut(event, input) {
 }
 /** 创建单屏全屏窗口，仅加载本地可信内容并拒绝外部导航和权限。 */
 async function createWindow() {
+  drives = discoverLocalDrives();
+  files = createLocalFiles({ roots:drives.roots, protectedPaths:[root,app.getPath('userData'),app.getPath('logs'),app.getPath('sessionData')], trash: shell.trashItem, ask:askFileQuestion });
+  files.subscribe(/* 只向可信桌面发布文件快照。 */ snapshot => { if (window && !window.isDestroyed()) window.webContents.send('files:snapshot',snapshot); });
   session.defaultSession.setPermissionRequestHandler(/* 拒绝页面权限申请。 */ (_contents,_permission,callback) => callback(false));
   session.defaultSession.setPermissionCheckHandler(/* 拒绝页面权限检查。 */ () => false);
   const browserSession = configureBrowserSession(session, notify);
@@ -31,6 +39,7 @@ async function createWindow() {
   window.webContents.on('will-attach-webview', /* 禁止额外网页容器。 */ event => event.preventDefault());
   browserHost = attachBrowserHost(window, notify, browserSession);
   window.on('closed', /* 清理本桌面的离屏网页。 */ () => browserHost.close());
+  window.on('closed', /* 释放目录监听、磁盘发现与等待中的问题。 */ () => { files.close(); drives.close(); for (const resolve of fileQuestions.values()) resolve('cancel'); fileQuestions.clear(); });
   window.webContents.on('before-input-event', shortcut);
   await window.loadURL(trustedURL);
 }
@@ -38,6 +47,23 @@ async function createWindow() {
 function assertTrusted(event) {
   if (!window || event.sender !== window.webContents || event.senderFrame !== window.webContents.mainFrame || event.senderFrame.url !== trustedURL) throw new Error('拒绝不可信来源');
 }
+/** 在受管理界面提问，超时或窗口关闭时取消，不默认授权覆盖或删除。 */
+function askFileQuestion(question) {
+  return new Promise(/* 问题使用不可猜测编号，回答入口校验可信来源。 */ resolve => {
+    const id = randomUUID();
+    const timeout = setTimeout(/* 无回答则安全取消。 */ () => finish('cancel'),300000);
+    /** 释放问题与超时，再继续当前操作。 */
+    function finish(answer) { clearTimeout(timeout); fileQuestions.delete(id); resolve(answer); }
+    fileQuestions.set(id,finish);
+    if (!window || window.isDestroyed()) finish('cancel');
+    else window.webContents.send('files:question',{ ...question,id });
+  });
+}
+ipcMain.handle('files:open', /* 只允许可信桌面浏览本地目录。 */ async (event,target) => { assertTrusted(event); if (target !== undefined && typeof target !== 'string') throw new Error('路径无效。'); return files.open(target); });
+ipcMain.handle('files:places', /* 常用目录使用 Windows 实际配置，不猜用户名或磁盘。 */ event => { assertTrusted(event); return [{ name:'桌面',path:app.getPath('desktop') },{ name:'下载',path:app.getPath('downloads') },{ name:'文档',path:app.getPath('documents') }]; });
+ipcMain.handle('files:operate', /* 文件变更在主进程再次校验。 */ async (event,request) => { assertTrusted(event); return files.operate(request); });
+ipcMain.on('files:answer', /* 只有可信界面可回答已存在的问题。 */ (event,id,answer) => { try { assertTrusted(event); if (['cancel','skip','keep','overwrite','trash','permanent'].includes(answer)) fileQuestions.get(id)?.(answer); } catch { /* 拒绝不可信回答。 */ } });
+ipcMain.on('files:close', /* 离开界面时释放监听并取消尚未授权的步骤。 */ event => { try { assertTrusted(event); files.close(); for (const resolve of fileQuestions.values()) resolve('cancel'); } catch { /* 不接受外部关闭。 */ } });
 ipcMain.handle('browser:open', /* 创建唯一离屏网页。 */ async event => { assertTrusted(event); return browserHost.open(); });
 ipcMain.handle('browser:command', /* 验证来源后交给内容承载。 */ async (event, command, value) => { assertTrusted(event); return browserHost.command(command, value); });
 ipcMain.on('browser:present', /* 同步当前显示计划。 */ (event, request) => { try { assertTrusted(event); browserHost.present(request); } catch { notify('网页显示计划无效。'); } });
