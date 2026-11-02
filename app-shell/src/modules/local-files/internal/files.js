@@ -85,7 +85,7 @@ export function createLocalFiles({ roots, protectedPaths, trash, ask }) {
   }
   /** 每次核对同时获取磁盘和当前目录，轮询补偿系统通知丢失。 */
   async function refresh() {
-    if (pollBusy || busy) return;
+    if (pollBusy) return;
     pollBusy = true;
     const version = generation, target = active;
     try {
@@ -97,7 +97,7 @@ export function createLocalFiles({ roots, protectedPaths, trash, ask }) {
       }
       const value = { roots:locations, directory, error };
       const signature = JSON.stringify(value);
-      if (!busy && version === generation && signature !== last) { last = signature; emit(value); }
+      if (version === generation && signature !== last) { last = signature; emit(value); }
     } catch (failure) { if (version === generation) emit({ error:`刷新失败：${failure.message}` }); }
     finally { pollBusy = false; }
   }

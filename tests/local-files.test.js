@@ -75,6 +75,21 @@ describe('本机文件管理公开契约', /* 通过公开入口验证文件行�
       expect(names).toContain(newName); expect(names).not.toContain(oldName);
     }
   });
+  it('等待冲突确认期间继续更新外部文件及磁盘入口', /* 文件操作等待用户时不暂停实时刷新。 */ async () => {
+    const from = path.join(base,'source'), to = path.join(base,'target'); await fs.mkdir(from); await fs.mkdir(to);
+    await fs.writeFile(path.join(from,'same.txt'),'source'); await fs.writeFile(path.join(to,'same.txt'),'target');
+    service.close(); let answer, waiting = false;
+    service = createLocalFiles({roots:/* 返回可变模拟盘符。 */ async () => locations,protectedPaths:[protectedDirectory],trash:/* 本例不执行删除。 */ async () => {},ask:/* 暂停确认模拟用户尚未回答。 */ () => new Promise(/* 保存明确回答入口。 */ resolve => { answer=resolve; waiting=true; })});
+    const values=[]; service.subscribe(/* 收集等待期间的实时变化。 */ value => values.push(value)); await service.open(to);
+    const operation = service.operate({kind:'copy',sources:[path.join(from,'same.txt')],directory:to});
+    try {
+      await expect.poll(/* 等待进入冲突确认。 */ () => waiting).toBe(true);
+      await fs.writeFile(path.join(to,'external.txt'),'new');
+      await expect.poll(/* 确认对话框期间也更新文件。 */ () => values.at(-1)?.directory?.entries.some(/* 匹配外部新文件。 */ entry => entry.name==='external.txt'),{timeout:1000,interval:20}).toBe(true);
+      locations=[];
+      await expect.poll(/* 确认对话框期间也更新盘符消失。 */ () => values.at(-1)?.directory,{timeout:1700}).toBe(null);
+    } finally { answer?.('skip'); await operation; }
+  });
   it('逐项处理目录合并冲突，支持跳过、保留两份、覆盖', /* 在独立临时目录验证当前场景。 */ async () => {
     const from = path.join(base,'from'), to = path.join(base,'to');
     await fs.mkdir(path.join(from,'folder'),{recursive:true}); await fs.mkdir(path.join(to,'folder'),{recursive:true});
