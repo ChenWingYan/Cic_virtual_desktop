@@ -12,7 +12,8 @@
     "test": "vitest run",
     "smoke": "node scripts/smoke.mjs",
     "smoke:browser": "node scripts/browser-smoke.mjs",
-    "smoke:files": "node scripts/files-smoke.mjs"
+    "smoke:files": "node scripts/files-smoke.mjs",
+    "smoke:inspection": "node scripts/inspection-smoke.mjs"
   },
   "devDependencies": {
     "electron": "45.1.0",

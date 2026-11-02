@@ -27,7 +27,7 @@ npm start
 - [架构取舍](docs/adr/0001-managed-content-and-public-contracts.md)
 - [实施规格与六项后续任务](https://github.com/ChenWingYan/Cic_virtual_desktop/issues/1)
 
-当前实现范围见[校准切片说明](docs/calibration-slice.md)、[浏览器切片说明](docs/browser-slice.md)及[文件管理器说明](docs/file-manager.md)。首页提供三个磁贴，浏览器支持单页面导航和返回桌面保留网页；文件管理器支持本地磁盘、U 盘、实时刷新及受自身文件保护约束的文件操作；业务软件仍待接入。浏览器采用可替换的离屏合成原型，尚未确认为生产渲染路线。
+当前实现范围见[校准切片说明](docs/calibration-slice.md)、[浏览器切片说明](docs/browser-slice.md)、[文件管理器说明](docs/file-manager.md)及[独立查验接入说明](docs/inspection-integration.md)。首页提供三个可进入的磁贴：浏览器支持单页面导航和保留网页；文件管理器提供本地磁盘、U 盘、实时刷新及受自身文件保护约束的文件操作；查验入口从指定独立产物目录加载主屏并管理自有后端。网页和查验采用离屏合成原型，生产渲染路线及实体屏效果仍待验证。
 
 `npm run smoke:browser` 验证真实网页在四方向及补偿下的点击、文字、滚动、拖拽、视频、单页面导航、文件操作拦截与重启 Cookie。测试使用独立数据目录和本机随机端口，生成 `artifacts/browser-smoke.json` 及截图。原生中文输入法、候选框和目标设备性能仍须现场验证。
 

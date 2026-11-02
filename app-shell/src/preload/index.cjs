@@ -34,4 +34,26 @@ contextBridge.exposeInMainWorld('desktop', {
   onBrowserState: (listener) => ipcRenderer.on('browser:state', /* 仅转发状态。 */ (_event, state) => listener(state)),
   /** 仅转发主进程产生的操作反馈。 */
   onBrowserNotice: (listener) => ipcRenderer.on('browser:notice', /* 仅暴露文字。 */ (_event, message) => listener(message)),
+  inspection: {
+    /** 查询配置目录与运行状态。 */
+    status: () => ipcRenderer.invoke('inspection:status'),
+    /** 通过系统选择器配置独立业务目录。 */
+    chooseDirectory: () => ipcRenderer.invoke('inspection:choose-directory'),
+    /** 打开或恢复查验内容。 */
+    open: () => ipcRenderer.invoke('inspection:open'),
+    /** 退出当前查验，保留桌面。 */
+    close: () => ipcRenderer.invoke('inspection:close'),
+    /** 重新连接业务页面。 */
+    reconnect: () => ipcRenderer.invoke('inspection:reconnect'),
+    /** 确认后重启查验。 */
+    restart: () => ipcRenderer.invoke('inspection:restart'),
+    /** 同步可见性与显示版本。 */
+    present: (payload) => ipcRenderer.send('inspection:present',payload),
+    /** 发送固定格式业务输入。 */
+    input: (payload) => ipcRenderer.send('inspection:input',payload),
+    /** 订阅业务画面，不暴露 IPC 对象。 */
+    onFrame: (listener) => { const handler=(_event,payload) => listener(payload); ipcRenderer.on('inspection:frame',handler); return () => ipcRenderer.removeListener('inspection:frame',handler); },
+    /** 订阅业务状态和故障。 */
+    onState: (listener) => { const handler=(_event,payload) => listener(payload); ipcRenderer.on('inspection:state',handler); return () => ipcRenderer.removeListener('inspection:state',handler); },
+  },
 });
