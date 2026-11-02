@@ -2,7 +2,7 @@ import { test,expect } from 'vitest';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { readInspectionManifest } from '../app-shell/modules/inspection/public/manifest.js';
+import { readInspectionManifest } from '../app-shell/src/modules/inspection/public/manifest.js';
 
 test('独立产物必须包含兼容入口，拒绝旧版本及目录外模块',() => {
   const root=fs.mkdtempSync(path.join(os.tmpdir(),'cic-manifest-'));

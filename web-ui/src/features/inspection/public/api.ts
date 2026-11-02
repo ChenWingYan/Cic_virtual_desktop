@@ -26,7 +26,7 @@ export interface InspectionBridge {
 export const INSPECTION_LAYOUT=Object.freeze({ width:1920,height:1200,toolbarHeight:120 });
 
 /** 以离屏画面呈现业务内容，桌面的同一显示矩阵负责输出与逆向输入。 */
-export function mountInspection(canvas:HTMLElement,bridge:InspectionBridge,getPlan:()=>DisplayPlan,getState:()=>InspectionState,onHome:()=>void,onError:(message:string)=>void) {
+export function mountInspection(canvas:HTMLElement,output:HTMLElement,bridge:InspectionBridge,getPlan:()=>DisplayPlan,getState:()=>InspectionState,onHome:()=>void,onError:(message:string)=>void) {
   canvas.innerHTML='<nav class="inspection-toolbar"><strong>查验程序</strong><button id="inspection-home">返回桌面</button><button id="inspection-reconnect">重新连接</button><button id="inspection-restart">重启查验</button><button id="inspection-close">退出查验</button><span id="inspection-status">正在连接业务画面…</span></nav><img id="inspection-frame" draggable="false" alt="查验业务画面"><textarea id="inspection-input" aria-label="查验文字输入" autocomplete="off"></textarea>';
   const frame=canvas.querySelector<HTMLImageElement>('#inspection-frame')!;
   const text=canvas.querySelector<HTMLTextAreaElement>('#inspection-input')!;
@@ -38,9 +38,16 @@ export function mountInspection(canvas:HTMLElement,bridge:InspectionBridge,getPl
   async function perform(action:()=>Promise<unknown>) { try { await action(); } catch(error) { onError(String((error as Error).message)); } }
   /** 使用当前会话及显示计划标识输入。 */
   function send(payload:Record<string,unknown>) { bridge.input({ ...payload,contentId:getState().contentId,version:getPlan().version }); }
+  /** 页面隐藏或几何变化时同步清理宿主与业务侧的活动指针。 */
+  function cancelPointer() {
+    if (activePointer===null) return;
+    const pointerId=activePointer; activePointer=null;
+    send({ type:'cancel' });
+    if (frame.hasPointerCapture(pointerId)) frame.releasePointerCapture(pointerId);
+  }
   /** 把输出坐标映射至业务画布，拒绝工具栏和留边区域。 */
   function point(event:MouseEvent) {
-    const rect=canvas.parentElement!.getBoundingClientRect();
+    const rect=output.getBoundingClientRect();
     const mapped=mapOutputInput(getPlan(),{ x:event.clientX-rect.left,y:event.clientY-rect.top });
     if (mapped.kind!=='hit') return null;
     const value={ x:mapped.point.x,y:mapped.point.y-INSPECTION_LAYOUT.toolbarHeight };
@@ -89,6 +96,7 @@ export function mountInspection(canvas:HTMLElement,bridge:InspectionBridge,getPl
   canvas.querySelector('#inspection-restart')!.addEventListener('click',() => { void perform(() => bridge.restart()); });
   canvas.querySelector('#inspection-close')!.addEventListener('click',() => { void perform(async () => { if (await bridge.close()) onHome(); }); });
   for (const type of ['pointerdown','pointerup','pointermove','pointercancel']) frame.addEventListener(type,pointer as EventListener);
+  frame.addEventListener('lostpointercapture',cancelPointer);
   frame.addEventListener('contextmenu',event => event.preventDefault());
   frame.addEventListener('wheel',wheel,{ passive:false });
   text.addEventListener('input',commit as EventListener);
@@ -100,7 +108,9 @@ export function mountInspection(canvas:HTMLElement,bridge:InspectionBridge,getPl
     setFrame(value:InspectionFrame) { if (!disposed && value.contentId===getState().contentId) { frame.src=value.image; if (!getState().error) status.textContent=''; } },
     /** 显示可读故障，保留重连、重启及返回入口。 */
     setError(message:string) { status.textContent=message; },
+    /** 隐藏后保留 DOM，但不能保留拖拽中的指针。 */
+    cancel:cancelPointer,
     /** 页面切换后丢弃旧 DOM 引用。 */
-    dispose() { if (activePointer!==null) send({ type:'cancel' }); activePointer=null; disposed=true; },
+    dispose() { cancelPointer(); disposed=true; },
   };
 }

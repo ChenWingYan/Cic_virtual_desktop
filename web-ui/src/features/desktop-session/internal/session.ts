@@ -4,7 +4,7 @@ import { createDisplayPlan } from '../../display-geometry/public/api';
 /** 桌面会话的可观察快照。 */
 export interface DesktopState {
   /** 当前受管理页面。 */
-  page: 'home' | 'calibration' | 'inspection';
+  page: 'home' | 'calibration' | 'browser' | 'files' | 'inspection';
   /** 当前有效显示配置。 */
   profile: DisplayProfile;
   /** 每次成功配置更新递增。 */
@@ -15,9 +15,9 @@ export interface DesktopSession {
   /** 返回独立状态快照。 */
   getState(): DesktopState;
   /** 进入支持的受管理内容。
-   * @param entry 校准或独立查验内容入口。
+   * @param entry 支持校准、浏览器及文件管理器入口。
    */
-  activateEntry(entry: 'calibration' | 'inspection'): void;
+  activateEntry(entry: 'calibration' | 'browser' | 'files' | 'inspection'): void;
   /** 返回主页并保留显示配置。 */
   returnHome(): void;
   /** 先校验再更新配置，失败保留当前版本。
@@ -27,14 +27,14 @@ export interface DesktopSession {
   /** 恢复软件安全初值。 */
   resetDisplayProfile(): void;
 }
-/** 创建仅拥有主页与校准内容的会话；配置变更先校验再增加版本。 */
+/** 创建受管理内容会话；配置变更先校验再增加版本。 */
 export function createDesktopSession(): DesktopSession {
   let state: DesktopState = { page:'home',profile:defaults(),version:0 };
   return {
     /** 返回独立快照，禁止调用者修改会话。 */
     getState() { return { ...state,profile:{ ...state.profile } }; },
-    /** 激活首期支持的校准入口。 */
-    activateEntry(entry) { if (!['calibration','inspection'].includes(entry)) throw new RangeError('入口尚未接入'); state.page = entry; },
+    /** 激活已接入的校准、浏览器或文件管理器入口。 */
+    activateEntry(entry) { if (!['calibration','browser','files','inspection'].includes(entry)) throw new RangeError('入口尚未接入'); state.page = entry; },
     /** 返回主页，保留当前显示配置。 */
     returnHome() { state.page = 'home'; },
     /** 原子更新有效配置；失败保留当前画面版本。 */

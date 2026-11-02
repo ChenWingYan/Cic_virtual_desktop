@@ -64,6 +64,18 @@ try {
       await desktop.screenshot({ path:`artifacts/inspection-${orientation}.png` });
       evidence.orientations.push(orientation);
     }
+    // 查验保持运行时切换已有浏览器和文件管理器，不能重建或销毁彼此的内容节点。
+    await desktop.locator('#inspection-home').click();
+    await desktop.locator('#open-browser').click();
+    await desktop.locator('#browser-welcome').waitFor();
+    await desktop.locator('#browser-home').click();
+    await desktop.locator('#open-files').click();
+    await desktop.locator('#files-panel').waitFor();
+    await desktop.locator('#files-panel [data-home]').click();
+    await desktop.locator('#inspection-open').click();
+    await desktop.locator('#inspection-frame').waitFor();
+    assert.equal((await desktop.evaluate(() => window.desktop.inspection.status())).backendPid,first.backendPid);
+    evidence.coexistsWithBrowserAndFiles=true;
     // 使用真实业务设置弹窗中的文字框验证转发；不触发保存、查验或外部设备命令。
     await clickBusiness('#btn-self-check-actions-toggle');
     await clickBusiness('#btn-self-check-system-config');
@@ -122,6 +134,18 @@ try {
     await desktop.screenshot({ path:'artifacts/inspection-video-probe.png' });
     await business.evaluate(() => window.__removeVideoProbe());
     evidence.syntheticVideoFrames=true;
+    await business.evaluate(() => {
+      const probe=document.createElement('textarea'); probe.id='keyboard-probe'; probe.style.cssText='position:fixed;left:50px;top:150px;width:300px;height:100px;z-index:2147483647'; document.body.append(probe);
+      window.__probeEscape=false; document.addEventListener('keydown',event => { if (event.key==='Escape') window.__probeEscape=true; });
+    });
+    await clickBusiness('#keyboard-probe');
+    await desktop.keyboard.insertText('first'); await desktop.keyboard.press('Enter'); await desktop.keyboard.insertText('second');
+    await business.waitForFunction(() => document.querySelector('#keyboard-probe').value==='first\nsecond');
+    await desktop.keyboard.press('Escape');
+    await business.waitForFunction(() => window.__probeEscape);
+    assert.equal(await desktop.locator('#inspection-frame').isVisible(),true);
+    evidence.businessEnterAndEscape=true;
+    await business.evaluate(() => document.querySelector('#keyboard-probe').remove());
     // 用业务页中的临时按钮验证拖出内容后释放，不触发原按钮点击。
     await business.evaluate(() => {
       const probe=document.createElement('button'); probe.id='pointer-probe'; probe.style.cssText='position:fixed;left:50px;top:50px;width:100px;height:60px;z-index:999999'; probe.textContent='拖拽验证';

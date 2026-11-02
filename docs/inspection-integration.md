@@ -1,6 +1,6 @@
 # 独立查验产物接入
 
-对应 [Issue #6](https://github.com/ChenWingYan/Cic_virtual_desktop/issues/6) 和 [ADR 0002](adr/0002-host-inspection-with-independent-components.md)。本轮是主屏最小接入原型，不代表完整业务及实体屏已验收。
+对应 [Issue #6](https://github.com/ChenWingYan/Cic_virtual_desktop/issues/6) 和 [ADR 0002](adr/0002-host-inspection-with-independent-components.md)。本轮是主屏最小接入原型，不代表完整业务及实体屏已验收。开发从旧校准 checkout 开始，随后整合本机 `codex/file-manager` 的现有桌面代码；其文件树 `c89de11e17ae289871f39ccfc117d480f41a8882` 与远端 main 提交 `17f1f7e6eb70a7d8fe4388d02d6746121d74ce23` 完全相同。保留浏览器和文件管理器，不覆盖其已有能力。
 
 ## 准备业务产物
 

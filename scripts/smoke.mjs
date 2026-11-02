@@ -1,8 +1,10 @@
 import { _electron as electron } from 'playwright';
 import { mkdir, writeFile } from 'node:fs/promises';
 import assert from 'node:assert/strict';
+import path from 'node:path';
 await mkdir('artifacts',{ recursive:true });
 const env = { ...process.env };
+env.CIC_DESKTOP_DATA_DIR = path.resolve('artifacts/calibration-profile');
 delete env.ELECTRON_RUN_AS_NODE;
 const app = await electron.launch({ args:['.'],env });
 try {
@@ -12,7 +14,7 @@ try {
   await page.getByRole('heading',{ name:'虚拟桌面',exact:true }).waitFor();
   assert.equal(await app.evaluate(/* 检查真实窗口全屏。 */ ({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].isFullScreen()),true);
   assert.equal(await page.evaluate(/* 确认未暴露 Node。 */ () => typeof window.require),'undefined');
-  assert.deepEqual(await page.evaluate(/* 检查桥的能力范围。 */ () => Object.keys(window.desktop).sort()),['inspection','onReset','quit']);
+  assert.deepEqual(await page.evaluate(/* 检查桥的能力范围。 */ () => Object.keys(window.desktop).sort()),['answerFileQuestion','browserCommand','browserInput','closeFiles','fileOperation','filePlaces','inspection','onBrowserFrame','onBrowserNotice','onBrowserState','onFileQuestion','onFilesSnapshot','onHome','onReset','openBrowser','openFiles','presentBrowser','quit']);
   await page.screenshot({ path:'artifacts/home.png' });
   await page.getByRole('button',{ name:'显示校准' }).click();
   for (const orientation of [0,90,180,270]) {
@@ -46,3 +48,4 @@ try {
   await writeFile('artifacts/smoke.json',JSON.stringify({ result:'passed',fullscreen:true,orientations:[0,90,180,270],compensation:[0.8,1.2],cornerHits:'4/4 each',recovery:'keyboard and home',rendererErrors:errors,deviceValidation:'not performed' },null,2));
   console.log('Electron smoke passed: fullscreen, isolated preload, four directions, 16 corner hits, reset, home.');
 } finally { await app.close(); }
+

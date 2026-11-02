@@ -135,7 +135,11 @@ export function createInspectionHost({ electron,desktopWindow,requestQuit }) {
     if (payload.type==='keyDown' || payload.type==='keyUp') {
       const allowed=new Set(['Backspace','Delete','Enter','Tab','Escape','ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown']);
       if (!allowed.has(payload.key)) return;
-      wc.sendInputEvent({ type:payload.type,keyCode:payload.key.replace('Arrow',''),modifiers:payload.shift ? ['shift'] : [] }); return;
+      const modifiers=payload.shift ? ['shift'] : [];
+      const keyCode=payload.key==='Enter' ? 'Return' : payload.key.replace('Arrow','');
+      wc.sendInputEvent({ type:payload.type,keyCode,modifiers });
+      if (payload.type==='keyDown' && payload.key==='Enter') wc.sendInputEvent({ type:'char',keyCode:'\r',modifiers });
+      return;
     }
     if (!Number.isFinite(payload.x) || !Number.isFinite(payload.y) || payload.x<0 || payload.y<0 || payload.x>=1920 || payload.y>=1080) return;
     const event={ type:payload.type,x:Math.round(payload.x),y:Math.round(payload.y),modifiers:[] };
@@ -149,6 +153,8 @@ export function createInspectionHost({ electron,desktopWindow,requestQuit }) {
     }
   }
   return { status,chooseDirectory,present,input,
+    /** 供外壳区分业务内部 Escape 和全局返回，不暴露窗口对象。 */
+    isVisible:() => visible,
     /** 打开或恢复业务页面，启动操作保持单次执行。 */
     open:() => exclusive(openInternal),
     /** 重连只刷新页面，避免未经确认重启后端。 */
