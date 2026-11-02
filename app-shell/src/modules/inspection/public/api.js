@@ -79,6 +79,11 @@ export function createInspectionHost({ electron,desktopWindow,requestQuit }) {
       content.webContents.session.setPermissionRequestHandler((_contents,_permission,callback) => callback(false));
       content.webContents.session.setPermissionCheckHandler(() => false);
       await content.loadURL(spec.url);
+      // Windows 可把隐藏窗口限制到会话屏幕大小；业务布局与输入仍须保持声明的逻辑视口。
+      content.webContents.debugger.attach('1.3');
+      await content.webContents.debugger.sendCommand('Emulation.setDeviceMetricsOverride',{ width:spec.width,height:spec.height,deviceScaleFactor:1,mobile:false });
+      const viewport=await content.webContents.executeJavaScript('({width:innerWidth,height:innerHeight})');
+      if (viewport.width!==spec.width || viewport.height!==spec.height) throw new Error('业务逻辑视口与组件声明不一致');
       // 保留副屏内容；单显示器时不弹出覆盖桌面的副窗口。
       const primaryId=screen.getPrimaryDisplay().id;
       const display=screen.getAllDisplays().find(item => item.id!==primaryId && String(item.id)===adapter.getConfig().secondaryDisplayId) || screen.getAllDisplays().find(item => item.id!==primaryId);
