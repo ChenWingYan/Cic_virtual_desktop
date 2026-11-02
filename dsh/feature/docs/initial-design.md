@@ -4,6 +4,8 @@
 
 ## 技能执行顺序与已采用的推荐项
 
+2026-11-02 范围更新：用户在两轮访谈后授权将文件功能从只读扩展为实时本机文件管理，支持普通文件操作及自身文件保护。当前规格见 [Issue #11](https://github.com/ChenWingYan/Cic_virtual_desktop/issues/11)，实现契约和验证见[文件管理器说明](../../../docs/file-manager.md)。下表的“首期只读”保留为 2026-10-30 的设计历史，不再约束当前文件操作范围；模块隔离与路径校验约束继续适用。
+
 本轮按 RepoContext 新项目设计流程执行：核对现有 Matt setup 配置 → grilling 识别决策及未知事实 → domain-modeling 定义术语 → codebase-design 设计模块契约 → 适配 to-spec 整理 Issue #1 → 适配 to-tickets 拆分实现任务。未调用 implement、implement-spec 或 tdd 实现业务代码；未执行 repocontext-update 生成不存在的接口快照。
 
 | 决策 | 采用的推荐项 | 理由或验证条件 |

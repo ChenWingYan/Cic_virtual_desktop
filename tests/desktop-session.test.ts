@@ -14,6 +14,9 @@ test('从主页进入校准，应用显示配置，返回并恢复默认', () =>
   session.activateEntry('browser');
   expect(session.getState()).toMatchObject({ page:'browser',version:1,profile:{ orientation:90 } });
   session.returnHome();
+  session.activateEntry('files');
+  expect(session.getState()).toMatchObject({ page:'files',version:1,profile:{ orientation:90 } });
+  session.returnHome();
   session.resetDisplayProfile();
   expect(session.getState()).toMatchObject({ profile:{ orientation:0,compensationX:1,compensationY:1,fontScale:1 },version:2 });
 });

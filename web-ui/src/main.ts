@@ -6,7 +6,23 @@ import type { Orientation } from './shared/contracts/display';
 import { LOGICAL_SIZE } from './shared/contracts/layout';
 import { createBrowserPanel } from './features/browser/public/api';
 import type { BrowserState, BrowserInput, BrowserPresentation } from './shared/contracts/browser';
+import { createFilePanel } from './features/file-browser/public/api';
+import type { FileOperation, FileResult, FileQuestion, FilesSnapshot } from './shared/contracts/files';
 declare global { interface Window { desktop: {
+  /** 浏览本机目录或此电脑。 */
+  openFiles(target?:string):Promise<void>;
+  /** 获取系统桌面、下载和文档路径。 */
+  filePlaces():Promise<{name:string;path:string}[]>;
+  /** 提交文件操作，接收部分完成结果。 */
+  fileOperation(request:FileOperation):Promise<FileResult>;
+  /** 提交当前问题的明确回答。 */
+  answerFileQuestion(id:string,answer:string):void;
+  /** 关闭目录监听。 */
+  closeFiles():void;
+  /** 订阅目录及磁盘快照。 */
+  onFilesSnapshot(listener:(snapshot:FilesSnapshot) => void):void;
+  /** 订阅逐项冲突与删除确认。 */
+  onFileQuestion(listener:(question:FileQuestion) => void):void;
   /** 请求主进程退出。 */
   quit(): Promise<void>;
   /** 订阅主进程恢复通知。 */
@@ -52,6 +68,7 @@ const hits = new Set<string>();
 const desktopContent = document.createElement('div');
 canvas.append(desktopContent);
 let browser: ReturnType<typeof createBrowserPanel> | undefined;
+let files: ReturnType<typeof createFilePanel> | undefined;
 
 /** 同步更新画面与输入计划；窗口单位采用 CSS 像素，浏览器负责 DPI。 */
 function present(): void {
@@ -68,16 +85,23 @@ function present(): void {
 function render(): void {
   hits.clear();
   const state = session.getState();
-  canvas.classList.toggle('browsing', state.page === 'browser');
-  desktopContent.hidden = state.page === 'browser';
+  canvas.classList.toggle('browsing', state.page === 'browser' || state.page === 'files');
+  desktopContent.hidden = state.page === 'browser' || state.page === 'files';
+  files?.setVisible(state.page === 'files');
+  if (state.page === 'files') {
+    browser?.setVisible(false);
+    if (!files) { files = createFilePanel(home); canvas.append(files.element); }
+    files.setVisible(true); present(); return;
+  }
   if (state.page === 'browser') {
     if (!browser) { browser = createBrowserPanel(home); canvas.append(browser.element); }
     browser.setVisible(true); present(); return;
   }
   browser?.setVisible(false);
-  desktopContent.innerHTML = state.page === 'home' ? `<header><p class="eyebrow">CIC / VIRTUAL DESKTOP</p><h1>虚拟桌面</h1><p>选择应用，开始工作。</p></header><section class="entries"><button id="open-browser"><strong><span class="tile-icon">◎</span>网页浏览器</strong><span>访问网站，继续当前网页 →</span></button><button disabled><strong><span class="tile-icon">▤</span>文件管理器</strong><span>待接入</span></button><button disabled><strong><span class="tile-icon">▦</span>业务软件</strong><span>待接入</span></button></section><button id="calibrate"><strong>显示校准 →</strong></button><p class="notice">硬件参数待验证。默认 1/1 仅为软件初值。</p>` : `${calibrationMarkup()}<button id="home">← 返回主页</button>`;
+  desktopContent.innerHTML = state.page === 'home' ? `<header><p class="eyebrow">CIC / VIRTUAL DESKTOP</p><h1>虚拟桌面</h1><p>选择应用，开始工作。</p></header><section class="entries"><button id="open-browser"><strong><span class="tile-icon">◎</span>网页浏览器</strong><span>访问网站，继续当前网页 →</span></button><button id="open-files"><strong><span class="tile-icon">▤</span>文件管理器</strong><span>本地磁盘、U 盘与实时文件 →</span></button><button disabled><strong><span class="tile-icon">▦</span>业务软件</strong><span>待接入</span></button></section><button id="calibrate"><strong>显示校准 →</strong></button><p class="notice">硬件参数待验证。默认 1/1 仅为软件初值。</p>` : `${calibrationMarkup()}<button id="home">← 返回主页</button>`;
   desktopContent.insertAdjacentHTML('beforeend', `<form id="settings"><label>方向 <select id="orientation">${[0,90,180,270].map(/* 生成支持方向的选项。 */ v => `<option ${v === state.profile.orientation ? 'selected' : ''}>${v}</option>`).join('')}</select></label><label>横向补偿 <input id="cx" type="number" step="any" value="${state.profile.compensationX}" required></label><label>纵向补偿 <input id="cy" type="number" step="any" value="${state.profile.compensationY}" required></label><button>应用显示</button><p id="error" role="alert"></p></form>`);
   document.querySelector('#open-browser')?.addEventListener('click', /* 进入浏览器但不重建已存在网页。 */ () => { session.activateEntry('browser'); render(); });
+  document.querySelector('#open-files')?.addEventListener('click', /* 进入文件管理器并重新核对目录。 */ () => { session.activateEntry('files'); render(); });
   document.querySelector('#calibrate')?.addEventListener('click', /* 进入校准并更新画面。 */ () => { session.activateEntry('calibration'); render(); });
   document.querySelector('#home')?.addEventListener('click', home);
   document.querySelector('#settings')!.addEventListener('submit', apply);

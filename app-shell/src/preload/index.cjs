@@ -1,5 +1,19 @@
 const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('desktop', {
+  /** 浏览本地目录，不暴露 Node 文件对象。 */
+  openFiles: (target) => ipcRenderer.invoke('files:open',target),
+  /** 获取系统常用目录。 */
+  filePlaces: () => ipcRenderer.invoke('files:places'),
+  /** 提交有界的文件操作。 */
+  fileOperation: (request) => ipcRenderer.invoke('files:operate',request),
+  /** 回答主进程产生的冲突或删除问题。 */
+  answerFileQuestion: (id,answer) => ipcRenderer.send('files:answer',id,answer),
+  /** 离开文件管理器时释放订阅资源。 */
+  closeFiles: () => ipcRenderer.send('files:close'),
+  /** 接收纯数据目录快照。 */
+  onFilesSnapshot: (listener) => ipcRenderer.on('files:snapshot', /* 不转发 IPC 事件对象。 */ (_event,value) => listener(value)),
+  /** 接收需要用户明确选择的问题。 */
+  onFileQuestion: (listener) => ipcRenderer.on('files:question', /* 不转发 IPC 事件对象。 */ (_event,value) => listener(value)),
   /** 仅允许可信界面请求退出，不暴露任意 IPC。 */
   quit: () => ipcRenderer.invoke('desktop:quit'),
   /** 接收主进程捕获的恢复快捷键，不泄漏事件对象。 */
